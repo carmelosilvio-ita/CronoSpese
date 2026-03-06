@@ -35,6 +35,23 @@ const MieNote = () => {
     setLoading(false);
   };
 
+  const deleteNota = async (id: string) => {
+    if (!confirm("Sei sicuro di voler eliminare questa bozza?")) return;
+    
+    const { error } = await supabase
+      .from('note_spese')
+      .delete()
+      .eq('id', id)
+      .eq('stato', 'BOZZA'); // Sicurezza extra: elimina solo se in bozza
+
+    if (error) {
+      showError("Errore durante l'eliminazione");
+    } else {
+      showSuccess("Nota eliminata con successo");
+      fetchNote();
+    }
+  };
+
   const getStatusBadge = (stato: string) => {
     switch (stato) {
       case 'BOZZA': return <Badge variant="outline">Bozza</Badge>;
@@ -87,9 +104,26 @@ const MieNote = () => {
                           <Eye size={18} />
                         </Button>
                         {n.stato === 'BOZZA' && (
-                          <Button variant="ghost" size="icon" className="text-blue-600" title="Modifica">
-                            <Edit size={18} />
-                          </Button>
+                          <>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="text-blue-600" 
+                              title="Modifica"
+                              onClick={() => navigate(`/nuova-nota?id=${n.id}`)}
+                            >
+                              <Edit size={18} />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="text-red-600" 
+                              title="Elimina"
+                              onClick={() => deleteNota(n.id)}
+                            >
+                              <Trash2 size={18} />
+                            </Button>
+                          </>
                         )}
                       </TableCell>
                     </TableRow>

@@ -1,18 +1,121 @@
-// Update this page (the content is just a fallback if you fail to update the page)
-
-import { MadeWithDyad } from "@/components/made-with-dyad";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { PlusCircle, FileText, CheckCircle, Clock } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 const Index = () => {
+  const navigate = useNavigate();
+  
+  // Mock user - in produzione verrebbe da Supabase Auth
+  const user = {
+    nome: "Carmelo",
+    cognome: "Silvio",
+    role: "ADMIN" as const,
+    email: "carmelo@example.com"
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-gray-600">
-          Start building your amazing project here!
-        </p>
+    <DashboardLayout user={user}>
+      <div className="space-y-8">
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">Benvenuto, {user.nome}</h2>
+            <p className="text-muted-foreground">Ecco il riepilogo delle tue attività.</p>
+          </div>
+          <Button onClick={() => navigate('/nuova-nota')} className="gap-2">
+            <PlusCircle size={20} />
+            Nuova Nota Spese
+          </Button>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Note in Bozza</CardTitle>
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">3</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">In Attesa</CardTitle>
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">1</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Approvate</CardTitle>
+              <CheckCircle className="h-4 w-4 text-green-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">12</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Totale Rimborsato</CardTitle>
+              <span className="text-sm font-bold text-blue-600">€</span>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">€ 1.240,50</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+          <Card className="col-span-4">
+            <CardHeader>
+              <CardTitle>Ultime Note Spese</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center justify-between p-4 border rounded-lg bg-white">
+                    <div className="flex items-center gap-4">
+                      <div className="p-2 bg-blue-100 text-blue-600 rounded-full">
+                        <FileText size={20} />
+                      </div>
+                      <div>
+                        <p className="font-medium">Servizio n. {i + 10} - Riccione</p>
+                        <p className="text-sm text-muted-foreground">12/02/2026 • Manifestazione Nuoto</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold">€ 145,00</p>
+                      <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full">Inviata</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="col-span-3">
+            <CardHeader>
+              <CardTitle>Prossimi Servizi</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="p-4 border rounded-lg border-l-4 border-l-blue-500">
+                  <p className="font-bold">Rally di Romagna</p>
+                  <p className="text-sm text-muted-foreground">Cesena • 20-22 Marzo 2026</p>
+                </div>
+                <div className="p-4 border rounded-lg border-l-4 border-l-slate-300">
+                  <p className="font-bold">Trofeo Nuoto Master</p>
+                  <p className="text-sm text-muted-foreground">Bologna • 05 Aprile 2026</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
-      <MadeWithDyad />
-    </div>
+    </DashboardLayout>
   );
 };
 

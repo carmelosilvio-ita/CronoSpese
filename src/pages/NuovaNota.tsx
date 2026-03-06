@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Trash2, Calculator, Save, Send, ArrowLeft } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Plus, Trash2, Calculator, Save, Send, ArrowLeft, AlertCircle } from "lucide-react";
 import { NotaSpese, Servizio, TariffeFederali, GiornataServizio } from "@/types/expense";
 import { calcolaTotali, getTariffeValide } from "@/utils/calculations";
 import { showSuccess, showError } from "@/utils/toast";
@@ -71,7 +72,6 @@ const NuovaNota = () => {
         setTariffeList(mappedTariffe as any);
       }
 
-      // Se c'è un ID, carica la nota esistente
       if (notaId) {
         const { data: notaData, error: notaError } = await supabase
           .from('note_spese')
@@ -95,7 +95,8 @@ const NuovaNota = () => {
             numPartite: Number(notaData.num_partite),
             applicaTrasportoUrbano: notaData.applica_trasporto_urbano,
             allegati: notaData.allegati || [],
-            stato: notaData.stato
+            stato: notaData.stato,
+            motivazioneRifiuto: notaData.motivazione_rifiuto
           });
 
           const s = notaData.servizi;
@@ -179,7 +180,8 @@ const NuovaNota = () => {
       num_partite: nota.numPartite,
       applica_trasporto_urbano: nota.applicaTrasportoUrbano,
       giornate: nota.giornate,
-      allegati: nota.allegati
+      allegati: nota.allegati,
+      motivazione_rifiuto: stato === 'INVIATA' ? null : nota.motivazioneRifiuto
     };
 
     let error;
@@ -206,7 +208,7 @@ const NuovaNota = () => {
 
   if (loading) return null;
 
-  const canEdit = !isViewMode && (nota.stato === 'BOZZA' || !nota.stato);
+  const canEdit = !isViewMode && (nota.stato === 'BOZZA' || nota.stato === 'RIFIUTATA' || !nota.stato);
 
   return (
     <DashboardLayout user={profile || { nome: "Utente", role: "CRONOMETRISTA" }}>
@@ -231,6 +233,17 @@ const NuovaNota = () => {
             </div>
           )}
         </div>
+
+        {nota.stato === 'RIFIUTATA' && nota.motivazioneRifiuto && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Nota Rifiutata</AlertTitle>
+            <AlertDescription>
+              <strong>Motivazione:</strong> {nota.motivazioneRifiuto}
+              <p className="mt-2 text-sm">Puoi correggere gli errori e inviare nuovamente la nota.</p>
+            </AlertDescription>
+          </Alert>
+        )}
 
         <Card>
           <CardHeader>

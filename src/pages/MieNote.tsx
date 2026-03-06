@@ -108,7 +108,7 @@ const MieNote = () => {
                         >
                           <Eye size={18} />
                         </Button>
-                        {n.stato === 'BOZZA' && (
+                        {(n.stato === 'BOZZA' || n.stato === 'RIFIUTATA') && (
                           <>
                             <Button 
                               variant="ghost" 
@@ -119,15 +119,17 @@ const MieNote = () => {
                             >
                               <Edit size={18} />
                             </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="text-red-600" 
-                              title="Elimina"
-                              onClick={() => deleteNota(n.id)}
-                            >
-                              <Trash2 size={18} />
-                            </Button>
+                            {n.stato === 'BOZZA' && (
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="text-red-600" 
+                                title="Elimina"
+                                onClick={() => deleteNota(n.id)}
+                              >
+                                <Trash2 size={18} />
+                              </Button>
+                            )}
                           </>
                         )}
                       </TableCell>

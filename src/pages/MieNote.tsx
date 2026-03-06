@@ -42,7 +42,7 @@ const MieNote = () => {
       .from('note_spese')
       .delete()
       .eq('id', id)
-      .eq('stato', 'BOZZA'); // Sicurezza extra: elimina solo se in bozza
+      .eq('stato', 'BOZZA');
 
     if (error) {
       showError("Errore durante l'eliminazione");
@@ -100,7 +100,12 @@ const MieNote = () => {
                       <TableCell>{new Date(n.created_at).toLocaleDateString()}</TableCell>
                       <TableCell>{getStatusBadge(n.stato)}</TableCell>
                       <TableCell className="text-right space-x-2">
-                        <Button variant="ghost" size="icon" title="Visualizza">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          title="Visualizza"
+                          onClick={() => navigate(`/nuova-nota?id=${n.id}&mode=view`)}
+                        >
                           <Eye size={18} />
                         </Button>
                         {n.stato === 'BOZZA' && (

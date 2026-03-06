@@ -9,14 +9,18 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Trash2, Calculator, Save, Send } from "lucide-react";
+import { Plus, Trash2, Calculator, Save, Send, ArrowLeft } from "lucide-react";
 import { NotaSpese, Servizio, TariffeFederali, GiornataServizio } from "@/types/expense";
 import { calcolaTotali, getTariffeValide } from "@/utils/calculations";
 import { showSuccess, showError } from "@/utils/toast";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 const NuovaNota = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const notaId = searchParams.get('id');
+  const isViewMode = searchParams.get('mode') === 'view';
+  
   const { user, profile } = useAuth();
   const [servizi, setServizi] = useState<Servizio[]>([]);
   const [tariffeList, setTariffeList] = useState<TariffeFederali[]>([]);
@@ -51,7 +55,6 @@ const NuovaNota = () => {
 
       if (tariffeRes.error) showError("Errore caricamento tariffe");
       else {
-        // Mappatura nomi colonne snake_case a camelCase per il calcolatore
         const mappedTariffe = (tariffeRes.data || []).map(t => ({
           id: t.id,
           decorrenza: t.decorrenza,
@@ -67,11 +70,53 @@ const NuovaNota = () => {
         }));
         setTariffeList(mappedTariffe as any);
       }
+
+      // Se c'è un ID, carica la nota esistente
+      if (notaId) {
+        const { data: notaData, error: notaError } = await supabase
+          .from('note_spese')
+          .select('*, servizi(*)')
+          .eq('id', notaId)
+          .single();
+
+        if (notaError) {
+          showError("Errore nel caricamento della nota");
+        } else {
+          setNota({
+            id: notaData.id,
+            viaggi: Number(notaData.viaggi),
+            kmTotali: Number(notaData.km_totali),
+            autostrada: Number(notaData.autostrada),
+            vittoDocumentato: Number(notaData.vitto_documentato),
+            alloggio: Number(notaData.alloggio),
+            altreSpese: Number(notaData.altre_spese),
+            giornate: notaData.giornate || [],
+            isSportDiSquadra: notaData.is_sport_di_squadra,
+            numPartite: Number(notaData.num_partite),
+            applicaTrasportoUrbano: notaData.applica_trasporto_urbano,
+            allegati: notaData.allegati || [],
+            stato: notaData.stato
+          });
+
+          const s = notaData.servizi;
+          setServizioSelezionato({
+            id: s.id,
+            numero: s.numero,
+            anno: s.anno,
+            luogo: s.luogo,
+            dataInizio: s.data_inizio,
+            dataFine: s.data_fine,
+            manifestazione: s.manifestazione,
+            organizzatore: s.organizzatore,
+            sport: s.sport
+          });
+        }
+      }
       setLoading(false);
     };
 
     fetchData();
-  }, []);
+  }, [notaId]);
 
   useEffect(() => {
     if (servizioSelezionato && tariffeList.length > 0) {
@@ -84,6 +129,7 @@ const NuovaNota = () => {
   }, [nota, servizioSelezionato, tariffeList]);
 
   const handleAddGiornata = () => {
+    if (isViewMode) return;
     const nuovaGiornata: GiornataServizio = {
       id: Math.random().toString(36).substr(2, 9),
       data: servizioSelezionato?.dataInizio || new Date().toISOString().split('T')[0],
@@ -98,6 +144,7 @@ const NuovaNota = () => {
   };
 
   const updateGiornata = (id: string, fields: Partial<GiornataServizio>) => {
+    if (isViewMode) return;
     setNota(prev => ({
       ...prev,
       giornate: prev.giornate?.map(g => g.id === id ? { ...g, ...fields } : g)
@@ -105,6 +152,7 @@ const NuovaNota = () => {
   };
 
   const removeGiornata = (id: string) => {
+    if (isViewMode) return;
     setNota(prev => ({
       ...prev,
       giornate: prev.giornate?.filter(g => g.id !== id)
@@ -134,7 +182,19 @@ const NuovaNota = () => {
       allegati: nota.allegati
     };
 
-    const { error } = await supabase.from('note_spese').insert([payload]);
+    let error;
+    if (notaId) {
+      const { error: updateError } = await supabase
+        .from('note_spese')
+        .update(payload)
+        .eq('id', notaId);
+      error = updateError;
+    } else {
+      const { error: insertError } = await supabase
+        .from('note_spese')
+        .insert([payload]);
+      error = insertError;
+    }
 
     if (error) {
       showError("Errore nel salvataggio");
@@ -146,19 +206,30 @@ const NuovaNota = () => {
 
   if (loading) return null;
 
+  const canEdit = !isViewMode && (nota.stato === 'BOZZA' || !nota.stato);
+
   return (
     <DashboardLayout user={profile || { nome: "Utente", role: "CRONOMETRISTA" }}>
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold">Nuova Nota Spese</h2>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => handleSave('BOZZA')}>
-              <Save className="mr-2 h-4 w-4" /> Salva Bozza
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/mie-note')}>
+              <ArrowLeft />
             </Button>
-            <Button onClick={() => handleSave('INVIATA')}>
-              <Send className="mr-2 h-4 w-4" /> Invia Nota
-            </Button>
+            <h2 className="text-2xl font-bold">
+              {isViewMode ? "Visualizza Nota Spese" : notaId ? "Modifica Nota Spese" : "Nuova Nota Spese"}
+            </h2>
           </div>
+          {canEdit && (
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => handleSave('BOZZA')}>
+                <Save className="mr-2 h-4 w-4" /> Salva Bozza
+              </Button>
+              <Button onClick={() => handleSave('INVIATA')}>
+                <Send className="mr-2 h-4 w-4" /> Invia Nota
+              </Button>
+            </div>
+          )}
         </div>
 
         <Card>
@@ -168,23 +239,26 @@ const NuovaNota = () => {
           <CardContent className="grid md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Servizio dal Registro</Label>
-              <Select onValueChange={(val) => {
-                const s = servizi.find(s => s.id === val);
-                if (s) {
-                  // Mappatura per compatibilità con l'interfaccia Servizio (camelCase)
-                  setServizioSelezionato({
-                    id: s.id,
-                    numero: (s as any).numero,
-                    anno: (s as any).anno,
-                    luogo: (s as any).luogo,
-                    dataInizio: (s as any).data_inizio,
-                    dataFine: (s as any).data_fine,
-                    manifestazione: (s as any).manifestazione,
-                    organizzatore: (s as any).organizzatore,
-                    sport: (s as any).sport
-                  });
-                }
-              }}>
+              <Select 
+                disabled={!canEdit}
+                value={servizioSelezionato?.id}
+                onValueChange={(val) => {
+                  const s = servizi.find(s => s.id === val);
+                  if (s) {
+                    setServizioSelezionato({
+                      id: s.id,
+                      numero: (s as any).numero,
+                      anno: (s as any).anno,
+                      luogo: (s as any).luogo,
+                      dataInizio: (s as any).data_inizio,
+                      dataFine: (s as any).data_fine,
+                      manifestazione: (s as any).manifestazione,
+                      organizzatore: (s as any).organizzatore,
+                      sport: (s as any).sport
+                    });
+                  }
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleziona un servizio..." />
                 </SelectTrigger>
@@ -219,27 +293,27 @@ const NuovaNota = () => {
               <CardContent className="pt-6 grid md:grid-cols-3 gap-6">
                 <div className="space-y-2">
                   <Label>Viaggi (Treno/Aereo/Bus/Taxi)</Label>
-                  <Input type="number" value={nota.viaggi} onChange={e => setNota({...nota, viaggi: Number(e.target.value)})} />
+                  <Input disabled={!canEdit} type="number" value={nota.viaggi} onChange={e => setNota({...nota, viaggi: Number(e.target.value)})} />
                 </div>
                 <div className="space-y-2">
                   <Label>Km Totali</Label>
-                  <Input type="number" value={nota.kmTotali} onChange={e => setNota({...nota, kmTotali: Number(e.target.value)})} />
+                  <Input disabled={!canEdit} type="number" value={nota.kmTotali} onChange={e => setNota({...nota, kmTotali: Number(e.target.value)})} />
                 </div>
                 <div className="space-y-2">
                   <Label>Autostrada</Label>
-                  <Input type="number" value={nota.autostrada} onChange={e => setNota({...nota, autostrada: Number(e.target.value)})} />
+                  <Input disabled={!canEdit} type="number" value={nota.autostrada} onChange={e => setNota({...nota, autostrada: Number(e.target.value)})} />
                 </div>
                 <div className="space-y-2">
                   <Label>Vitto Documentato</Label>
-                  <Input type="number" value={nota.vittoDocumentato} onChange={e => setNota({...nota, vittoDocumentato: Number(e.target.value)})} />
+                  <Input disabled={!canEdit} type="number" value={nota.vittoDocumentato} onChange={e => setNota({...nota, vittoDocumentato: Number(e.target.value)})} />
                 </div>
                 <div className="space-y-2">
                   <Label>Alloggio</Label>
-                  <Input type="number" value={nota.alloggio} onChange={e => setNota({...nota, alloggio: Number(e.target.value)})} />
+                  <Input disabled={!canEdit} type="number" value={nota.alloggio} onChange={e => setNota({...nota, alloggio: Number(e.target.value)})} />
                 </div>
                 <div className="space-y-2">
                   <Label>Altre Spese</Label>
-                  <Input type="number" value={nota.altreSpese} onChange={e => setNota({...nota, altreSpese: Number(e.target.value)})} />
+                  <Input disabled={!canEdit} type="number" value={nota.altreSpese} onChange={e => setNota({...nota, altreSpese: Number(e.target.value)})} />
                 </div>
               </CardContent>
             </Card>
@@ -251,6 +325,7 @@ const NuovaNota = () => {
                 <div className="flex items-center space-x-4 p-4 bg-blue-50 rounded-lg">
                   <div className="flex items-center space-x-2">
                     <Checkbox 
+                      disabled={!canEdit}
                       id="sport-squadra" 
                       checked={nota.isSportDiSquadra} 
                       onCheckedChange={(val) => setNota({...nota, isSportDiSquadra: !!val})} 
@@ -259,6 +334,7 @@ const NuovaNota = () => {
                   </div>
                   <div className="flex items-center space-x-2">
                     <Checkbox 
+                      disabled={!canEdit}
                       id="trasporto-urbano" 
                       checked={nota.applicaTrasportoUrbano} 
                       onCheckedChange={(val) => setNota({...nota, applicaTrasportoUrbano: !!val})} 
@@ -270,36 +346,36 @@ const NuovaNota = () => {
                 {nota.isSportDiSquadra ? (
                   <div className="space-y-2 max-w-xs">
                     <Label>Numero Partite</Label>
-                    <Input type="number" value={nota.numPartite} onChange={e => setNota({...nota, numPartite: Number(e.target.value)})} />
+                    <Input disabled={!canEdit} type="number" value={nota.numPartite} onChange={e => setNota({...nota, numPartite: Number(e.target.value)})} />
                   </div>
                 ) : (
                   <div className="space-y-4">
                     <div className="flex justify-between items-center">
                       <h3 className="font-semibold">Dettaglio Giornate</h3>
-                      <Button size="sm" onClick={handleAddGiornata}><Plus className="mr-2 h-4 w-4" /> Aggiungi Giorno</Button>
+                      {canEdit && <Button size="sm" onClick={handleAddGiornata}><Plus className="mr-2 h-4 w-4" /> Aggiungi Giorno</Button>}
                     </div>
                     {nota.giornate?.map((g, idx) => (
                       <div key={g.id} className="p-4 border rounded-lg space-y-4 bg-slate-50">
                         <div className="flex justify-between items-center">
                           <span className="font-bold text-blue-600">Giorno {idx + 1}</span>
-                          <Button variant="ghost" size="sm" onClick={() => removeGiornata(g.id)} className="text-red-500"><Trash2 size={16} /></Button>
+                          {canEdit && <Button variant="ghost" size="sm" onClick={() => removeGiornata(g.id)} className="text-red-500"><Trash2 size={16} /></Button>}
                         </div>
                         <div className="grid md:grid-cols-4 gap-4">
                           <div className="space-y-2">
                             <Label>Data</Label>
-                            <Input type="date" value={g.data} onChange={e => updateGiornata(g.id, { data: e.target.value })} />
+                            <Input disabled={!canEdit} type="date" value={g.data} onChange={e => updateGiornata(g.id, { data: e.target.value })} />
                           </div>
                           <div className="space-y-2">
                             <Label>Ore Base</Label>
-                            <Input type="number" value={g.oreBase} onChange={e => updateGiornata(g.id, { oreBase: Number(e.target.value) })} />
+                            <Input disabled={!canEdit} type="number" value={g.oreBase} onChange={e => updateGiornata(g.id, { oreBase: Number(e.target.value) })} />
                           </div>
                           <div className="space-y-2">
                             <Label>Ore Spec.</Label>
-                            <Input type="number" value={g.oreSpecialistiche} onChange={e => updateGiornata(g.id, { oreSpecialistiche: Number(e.target.value) })} />
+                            <Input disabled={!canEdit} type="number" value={g.oreSpecialistiche} onChange={e => updateGiornata(g.id, { oreSpecialistiche: Number(e.target.value) })} />
                           </div>
                           <div className="space-y-2">
                             <Label>Forfait 4h</Label>
-                            <Select value={g.applicaForfait} onValueChange={(val: any) => updateGiornata(g.id, { applicaForfait: val })}>
+                            <Select disabled={!canEdit} value={g.applicaForfait} onValueChange={(val: any) => updateGiornata(g.id, { applicaForfait: val })}>
                               <SelectTrigger>
                                 <SelectValue />
                               </SelectTrigger>
@@ -314,14 +390,14 @@ const NuovaNota = () => {
                         <div className="grid md:grid-cols-3 gap-4">
                           <div className="space-y-2">
                             <Label>Ore Notturne/Festive Base</Label>
-                            <Input type="number" value={g.oreNotturneFestiveBase} onChange={e => updateGiornata(g.id, { oreNotturneFestiveBase: Number(e.target.value) })} />
+                            <Input disabled={!canEdit} type="number" value={g.oreNotturneFestiveBase} onChange={e => updateGiornata(g.id, { oreNotturneFestiveBase: Number(e.target.value) })} />
                           </div>
                           <div className="space-y-2">
                             <Label>Ore Notturne/Festive Spec.</Label>
-                            <Input type="number" value={g.oreNotturneFestiveSpec} onChange={e => updateGiornata(g.id, { oreNotturneFestiveSpec: Number(e.target.value) })} />
+                            <Input disabled={!canEdit} type="number" value={g.oreNotturneFestiveSpec} onChange={e => updateGiornata(g.id, { oreNotturneFestiveSpec: Number(e.target.value) })} />
                           </div>
                           <div className="flex items-center space-x-2 pt-8">
-                            <Checkbox id={`pasto-${g.id}`} checked={g.mancatoPasto} onCheckedChange={(val) => updateGiornata(g.id, { mancatoPasto: !!val })} />
+                            <Checkbox disabled={!canEdit} id={`pasto-${g.id}`} checked={g.mancatoPasto} onCheckedChange={(val) => updateGiornata(g.id, { mancatoPasto: !!val })} />
                             <Label htmlFor={`pasto-${g.id}`}>Mancato Pasto</Label>
                           </div>
                         </div>

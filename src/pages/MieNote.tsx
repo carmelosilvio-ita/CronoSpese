@@ -46,7 +46,7 @@ const MieNote = () => {
   };
 
   return (
-    <DashboardLayout user={profile}>
+    <DashboardLayout user={profile || { nome: "Utente", role: "CRONOMETRISTA" }}>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <h2 className="text-2xl font-bold">Le mie Note Spese</h2>
@@ -91,7 +91,8 @@ const MieNote = () => {
                             <Edit size={18} />
                           </Button>
                         )}
-                      </TableRow>
+                      </TableCell>
+                    </TableRow>
                   ))
                 )}
               </TableBody>

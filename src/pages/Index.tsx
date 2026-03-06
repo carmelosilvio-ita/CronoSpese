@@ -2,45 +2,54 @@ import React from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, FileText, CheckCircle, Clock } from "lucide-react";
+import { PlusCircle, FileText, CheckCircle, Clock, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/components/auth/AuthProvider";
 
 const Index = () => {
   const navigate = useNavigate();
-  const { profile, loading } = useAuth();
+  const { profile, loading, isAdmin } = useAuth();
   
   if (loading) return null;
 
-  // Fallback se il profilo non è ancora caricato (anche se gestito da ProtectedRoute)
-  const user = profile || {
-    nome: "Utente",
-    cognome: "",
-    role: "CRONOMETRISTA"
-  };
+  const user = profile || { nome: "Utente", role: "CRONOMETRISTA" };
 
   return (
     <DashboardLayout user={user}>
       <div className="space-y-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h2 className="text-3xl font-bold tracking-tight">Benvenuto, {user.nome}</h2>
-            <p className="text-muted-foreground">Ecco il riepilogo delle tue attività.</p>
+            <div className="flex items-center gap-2">
+              <h2 className="text-3xl font-bold tracking-tight">Benvenuto, {user.nome}</h2>
+              {isAdmin && <ShieldCheck className="text-blue-600" size={24} title="Super Utente" />}
+            </div>
+            <p className="text-muted-foreground">
+              {isAdmin ? "Modalità Amministratore Attiva" : "Ecco il riepilogo delle tue attività."}
+            </p>
           </div>
-          <Button onClick={() => navigate('/nuova-nota')} className="gap-2 bg-blue-600 hover:bg-blue-700">
-            <PlusCircle size={20} />
-            Nuova Nota Spese
-          </Button>
+          <div className="flex gap-2">
+            {isAdmin && (
+              <Button variant="outline" onClick={() => navigate('/servizi')}>
+                Gestisci Registro
+              </Button>
+            )}
+            <Button onClick={() => navigate('/nuova-nota')} className="gap-2 bg-blue-600 hover:bg-blue-700">
+              <PlusCircle size={20} />
+              Nuova Nota Spese
+            </Button>
+          </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card className="border-l-4 border-l-yellow-500">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Note in Bozza</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                {isAdmin ? "Note da Approvare" : "Note in Bozza"}
+              </CardTitle>
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">3</div>
+              <div className="text-2xl font-bold">{isAdmin ? "8" : "3"}</div>
             </CardContent>
           </Card>
           <Card className="border-l-4 border-l-blue-500">
@@ -63,7 +72,9 @@ const Index = () => {
           </Card>
           <Card className="border-l-4 border-l-indigo-500">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Totale Rimborsato</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                {isAdmin ? "Budget Totale" : "Totale Rimborsato"}
+              </CardTitle>
               <span className="text-sm font-bold text-blue-600">€</span>
             </CardHeader>
             <CardContent>
@@ -75,7 +86,7 @@ const Index = () => {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
           <Card className="col-span-4">
             <CardHeader>
-              <CardTitle>Ultime Note Spese</CardTitle>
+              <CardTitle>{isAdmin ? "Tutte le Note Recenti" : "Ultime Note Spese"}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -87,7 +98,7 @@ const Index = () => {
                       </div>
                       <div>
                         <p className="font-medium">Servizio n. {i + 10} - Riccione</p>
-                        <p className="text-sm text-muted-foreground">12/02/2026 • Manifestazione Nuoto</p>
+                        <p className="text-sm text-muted-foreground">12/02/2026 • {isAdmin ? "Utente: Rossi M." : "Manifestazione Nuoto"}</p>
                       </div>
                     </div>
                     <div className="text-right">

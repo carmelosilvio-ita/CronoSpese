@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,34 +12,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Trash2, Calculator, Save, Send } from "lucide-react";
 import { NotaSpese, Servizio, TariffeFederali, GiornataServizio } from "@/types/expense";
 import { calcolaTotali, getTariffeValide } from "@/utils/calculations";
-import { showSuccess } from "@/utils/toast";
+import { showSuccess, showError } from "@/utils/toast";
 import { useNavigate } from 'react-router-dom';
-
-// Mock Data
-const MOCK_SERVIZI: Servizio[] = [
-  { id: '1', numero: 3, anno: 2026, luogo: 'Riccione', dataInizio: '2026-02-04', dataFine: '2026-02-08', manifestazione: 'Criteria Giovanili Primaverili Lifesaving', organizzatore: 'F.I.N. Salvamento', sport: 'Nuoto' },
-  { id: '2', numero: 4, anno: 2026, luogo: 'Cesena', dataInizio: '2026-02-15', dataFine: '2026-02-15', manifestazione: 'Campionato Regionale Atletica', organizzatore: 'FIDAL', sport: 'Atletica' },
-];
-
-const MOCK_TARIFFE: TariffeFederali[] = [
-  {
-    id: '1',
-    decorrenza: '2026-01-01',
-    diariaBase: 6,
-    forfait4hBase: 30,
-    diariaSpecialistica: 10,
-    forfait4hSpecialistica: 40,
-    maggiorazioneFestivaNotturna: 0.5,
-    diariaPartite: 12,
-    indennitaTrasportoUrbano: 7,
-    indennitaMancatoPasto: 15,
-    indennitaKm: 0.33
-  }
-];
 
 const NuovaNota = () => {
   const navigate = useNavigate();
+  const { user, profile } = useAuth();
+  const [servizi, setServizi] = useState<Servizio[]>([]);
+  const [tariffeList, setTariffeList] = useState<TariffeFederali[]>([]);
   const [servizioSelezionato, setServizioSelezionato] = useState<Servizio | null>(null);
+  const [loading, setLoading] = useState(true);
+  
   const [nota, setNota] = useState<Partial<NotaSpese>>({
     viaggi: 0,
     kmTotali: 0,
@@ -55,19 +40,53 @@ const NuovaNota = () => {
   const [totali, setTotali] = useState<any>(null);
 
   useEffect(() => {
-    if (servizioSelezionato) {
-      const tariffe = getTariffeValide(servizioSelezionato.dataInizio, MOCK_TARIFFE);
+    const fetchData = async () => {
+      const [serviziRes, tariffeRes] = await Promise.all([
+        supabase.from('servizi').select('*').order('data_inizio', { ascending: false }),
+        supabase.from('tariffe_federali').select('*').order('decorrenza', { ascending: false })
+      ]);
+
+      if (serviziRes.error) showError("Errore caricamento servizi");
+      else setServizi(serviziRes.data as any || []);
+
+      if (tariffeRes.error) showError("Errore caricamento tariffe");
+      else {
+        // Mappatura nomi colonne snake_case a camelCase per il calcolatore
+        const mappedTariffe = (tariffeRes.data || []).map(t => ({
+          id: t.id,
+          decorrenza: t.decorrenza,
+          diariaBase: Number(t.diaria_base),
+          forfait4hBase: Number(t.forfait_4h_base),
+          diariaSpecialistica: Number(t.diaria_specialistica),
+          forfait4hSpecialistica: Number(t.forfait_4h_specialistica),
+          maggiorazioneFestivaNotturna: Number(t.maggiorazione_festiva_notturna),
+          diariaPartite: Number(t.diaria_partite),
+          indennitaTrasportoUrbano: Number(t.indennita_trasporto_urbano),
+          indennitaMancatoPasto: Number(t.indennita_mancato_pasto),
+          indennitaKm: Number(t.indennita_km)
+        }));
+        setTariffeList(mappedTariffe as any);
+      }
+      setLoading(false);
+    };
+
+    fetchData();
+  }, []);
+
+  useEffect(() => {
+    if (servizioSelezionato && tariffeList.length > 0) {
+      const tariffe = getTariffeValide(servizioSelezionato.dataInizio, tariffeList);
       if (tariffe) {
         const res = calcolaTotali(nota as NotaSpese, tariffe);
         setTotali(res);
       }
     }
-  }, [nota, servizioSelezionato]);
+  }, [nota, servizioSelezionato, tariffeList]);
 
   const handleAddGiornata = () => {
     const nuovaGiornata: GiornataServizio = {
       id: Math.random().toString(36).substr(2, 9),
-      data: servizioSelezionato?.dataInizio || '',
+      data: servizioSelezionato?.dataInizio || new Date().toISOString().split('T')[0],
       oreBase: 0,
       oreSpecialistiche: 0,
       oreNotturneFestiveBase: 0,
@@ -92,16 +111,51 @@ const NuovaNota = () => {
     }));
   };
 
+  const handleSave = async (stato: 'BOZZA' | 'INVIATA') => {
+    if (!servizioSelezionato) {
+      showError("Seleziona un servizio");
+      return;
+    }
+
+    const payload = {
+      user_id: user?.id,
+      servizio_id: servizioSelezionato.id,
+      stato: stato,
+      viaggi: nota.viaggi,
+      km_totali: nota.kmTotali,
+      autostrada: nota.autostrada,
+      vitto_documentato: nota.vittoDocumentato,
+      alloggio: nota.alloggio,
+      altre_spese: nota.altreSpese,
+      is_sport_di_squadra: nota.isSportDiSquadra,
+      num_partite: nota.numPartite,
+      applica_trasporto_urbano: nota.applicaTrasportoUrbano,
+      giornate: nota.giornate,
+      allegati: nota.allegati
+    };
+
+    const { error } = await supabase.from('note_spese').insert([payload]);
+
+    if (error) {
+      showError("Errore nel salvataggio");
+    } else {
+      showSuccess(stato === 'BOZZA' ? "Bozza salvata!" : "Nota inviata con successo!");
+      navigate('/mie-note');
+    }
+  };
+
+  if (loading) return null;
+
   return (
-    <DashboardLayout user={{ nome: "Carmelo", cognome: "Silvio", role: "CRONOMETRISTA" }}>
+    <DashboardLayout user={profile || { nome: "Utente", role: "CRONOMETRISTA" }}>
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex justify-between items-center">
           <h2 className="text-2xl font-bold">Nuova Nota Spese</h2>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => showSuccess("Bozza salvata!")}>
+            <Button variant="outline" onClick={() => handleSave('BOZZA')}>
               <Save className="mr-2 h-4 w-4" /> Salva Bozza
             </Button>
-            <Button onClick={() => { showSuccess("Nota inviata per approvazione!"); navigate('/mie-note'); }}>
+            <Button onClick={() => handleSave('INVIATA')}>
               <Send className="mr-2 h-4 w-4" /> Invia Nota
             </Button>
           </div>
@@ -114,14 +168,30 @@ const NuovaNota = () => {
           <CardContent className="grid md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Servizio dal Registro</Label>
-              <Select onValueChange={(val) => setServizioSelezionato(MOCK_SERVIZI.find(s => s.id === val) || null)}>
+              <Select onValueChange={(val) => {
+                const s = servizi.find(s => s.id === val);
+                if (s) {
+                  // Mappatura per compatibilità con l'interfaccia Servizio (camelCase)
+                  setServizioSelezionato({
+                    id: s.id,
+                    numero: (s as any).numero,
+                    anno: (s as any).anno,
+                    luogo: (s as any).luogo,
+                    dataInizio: (s as any).data_inizio,
+                    dataFine: (s as any).data_fine,
+                    manifestazione: (s as any).manifestazione,
+                    organizzatore: (s as any).organizzatore,
+                    sport: (s as any).sport
+                  });
+                }
+              }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Seleziona un servizio..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {MOCK_SERVIZI.map(s => (
+                  {servizi.map(s => (
                     <SelectItem key={s.id} value={s.id}>
-                      Servizio n. {s.numero} - {s.manifestazione}
+                      Servizio n. {(s as any).numero} - {(s as any).manifestazione}
                     </SelectItem>
                   ))}
                 </SelectContent>
